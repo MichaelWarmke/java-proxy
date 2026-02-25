@@ -1,0 +1,6 @@
+com/example/javaproxy/service/ProxyService.class
+com/example/javaproxy/config/ProxyProperties.class
+com/example/javaproxy/controller/ProxyController.class
+com/example/javaproxy/aspect/WiremockAspect.class
+com/example/javaproxy/JavaProxyApplication.class
+com/example/javaproxy/aspect/RecordWiremock.class

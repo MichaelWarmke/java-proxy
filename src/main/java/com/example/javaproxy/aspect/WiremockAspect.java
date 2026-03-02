@@ -8,6 +8,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,23 +65,39 @@ public class WiremockAspect {
         Object[] args = joinPoint.getArgs();
         int argsHashCode = Arrays.deepHashCode(args);
 
+        boolean isMono = Mono.class.isAssignableFrom(signature.getReturnType());
+
         if (cache.containsKey(argsHashCode)) {
-            return cache.get(argsHashCode);
+            Object cachedValue = cache.get(argsHashCode);
+            return isMono ? Mono.just(cachedValue) : cachedValue;
         }
 
         Object result = joinPoint.proceed();
 
-        cache.put(argsHashCode, result);
+        if (isMono) {
+            return ((Mono<?>) result).doOnSuccess(value -> {
+                cache.put(argsHashCode, value);
+                writeStubToFile(signature.getName(), argsHashCode, args, value);
+            });
+        } else {
+            cache.put(argsHashCode, result);
+            writeStubToFile(signature.getName(), argsHashCode, args, result);
+            return result;
+        }
+    }
 
-        Map<String, Object> stub = new HashMap<>();
-        stub.put("request", buildRequestStub(args));
-        stub.put("response", buildResponseStub(result));
+    private void writeStubToFile(String methodName, int argsHashCode, Object[] args, Object result) {
+        try {
+            Map<String, Object> stub = new HashMap<>();
+            stub.put("request", buildRequestStub(args));
+            stub.put("response", buildResponseStub(result));
 
-        String filename = signature.getName() + "_" + Math.abs(argsHashCode) + ".json";
-        File file = new File(wiremockDir, filename);
-        objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, stub);
-
-        return result;
+            String filename = methodName + "_" + Math.abs(argsHashCode) + ".json";
+            File file = new File(wiremockDir, filename);
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, stub);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private Map<String, Object> buildRequestStub(Object[] args) {

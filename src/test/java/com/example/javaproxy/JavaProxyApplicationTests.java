@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import reactor.test.StepVerifier;
 
 import java.io.File;
 import java.io.IOException;
@@ -74,6 +75,24 @@ class JavaProxyApplicationTests {
 
         // 6. Verify that the file was not modified (i.e., it was cached)
         assertThat(stubPath.toFile().lastModified()).isEqualTo(lastModified);
+    }
+
+    @Test
+    void whenReactiveMethodIsCalled_thenStubIsCreatedAndCached() {
+        // 1. Call the reactive method for the first time
+        StepVerifier.create(testService.getGreetingReactive("ReactiveWorld"))
+                .expectNext("Hello, ReactiveWorld!")
+                .verifyComplete();
+
+        // 2. Verify the stub file was created
+        String expectedFilename = "getGreetingReactive_" + Math.abs(java.util.Arrays.deepHashCode(new Object[]{"ReactiveWorld"})) + ".json";
+        Path stubPath = Paths.get("wiremock", expectedFilename);
+        assertThat(stubPath).exists();
+
+        // 3. Call the method again to ensure it's served from cache
+        StepVerifier.create(testService.getGreetingReactive("ReactiveWorld"))
+                .expectNext("Hello, ReactiveWorld!")
+                .verifyComplete();
     }
 
     @Test
